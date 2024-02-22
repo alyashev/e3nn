@@ -2,6 +2,7 @@ import argparse
 import logging
 
 import torch
+import intel_extension_for_pytorch as ipex
 from torch.utils.benchmark import Timer
 
 from e3nn.o3 import Irreps, FullyConnectedTensorProduct, ElementwiseTensorProduct
@@ -29,18 +30,18 @@ def main() -> None:
     parser.add_argument("--irreps-in1", type=str, default=None)
     parser.add_argument("--irreps-in2", type=str, default=None)
     parser.add_argument("--irreps-out", type=str, default=None)
-    parser.add_argument("--cuda", type=t_or_f, default=True)
+    parser.add_argument("--xpu", type=t_or_f, default=True)
     parser.add_argument("--backward", type=t_or_f, default=True)
     parser.add_argument("--opt-ein", type=t_or_f, default=True)
     parser.add_argument("--specialized-code", type=t_or_f, default=True)
     parser.add_argument("--elementwise", action="store_true")
-    parser.add_argument("-n", type=int, default=1000)
+    parser.add_argument("--n", type=int, default=1000)
     parser.add_argument("--batch", type=int, default=10)
 
     args = parser.parse_args()
 
-    device = "cuda" if (torch.cuda.is_available() and args.cuda) else "cpu"
-    args.cuda = device == "cuda"
+    device = "xpu" if (torch.xpu.is_available() and args.xpu) else "cpu"
+    args.xpu = device == "xpu"
 
     print("======= Benchmark with settings: ======")
     for key, val in vars(args).items():
@@ -63,6 +64,7 @@ def main() -> None:
             irreps_in1, irreps_in2, irreps_out, _specialized_code=args.specialized_code, _optimize_einsums=args.opt_ein
         )
     tp = tp.to(device=device)
+
     assert len(tp.instructions) > 0, "Bad irreps, no instructions"
     print(f"Tensor product: {tp}")
     print("Instructions:")
@@ -82,6 +84,8 @@ def main() -> None:
     # compile
     if args.jit:
         tp = compile(tp)
+
+    ipex.optimize(tp)
 
     print("starting...")
 
