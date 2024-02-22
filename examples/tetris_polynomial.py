@@ -13,6 +13,7 @@ This example is minimal:
 import logging
 
 import torch
+import intel_extension_for_pytorch as ipex
 from torch_cluster import radius_graph
 from torch_geometric.data import Data, DataLoader
 from torch_scatter import scatter
@@ -107,8 +108,14 @@ class InvariantPolynomial(torch.nn.Module):
 
 
 def main() -> None:
+    device='xpu'
     data, labels = tetris()
+    data.to(device)
+    labels.to(device)
+
     f = InvariantPolynomial()
+    f.to(device)
+    ipex.optimize(f)
 
     optim = torch.optim.Adam(f.parameters(), lr=1e-2)
 
@@ -123,6 +130,7 @@ def main() -> None:
 
         if step % 10 == 0:
             accuracy = pred.round().eq(labels).all(dim=1).double().mean(dim=0).item()
+            accruracy.to('cpu')
             print(f"epoch {step:5d} | loss {loss:<10.1f} | {100 * accuracy:5.1f}% accuracy")
 
     # == Check equivariance ==
@@ -130,6 +138,7 @@ def main() -> None:
     # check its equivariance to the same data with new rotations:
     print("Testing equivariance directly...")
     rotated_data, _ = tetris()
+    rotated_data.to(device)
     error = f(rotated_data) - f(data)
     print(f"Equivariance error = {error.abs().max().item():.1e}")
 
