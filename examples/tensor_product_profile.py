@@ -42,6 +42,7 @@ def get_data(profiler, table, shapes=False):
     output = output.set_index(columns[0])
 
     return output
+    
 crt_dir = os.path.dirname(os.path.realpath(__file__))
 
 # https://stackoverflow.com/a/15008806/1008938

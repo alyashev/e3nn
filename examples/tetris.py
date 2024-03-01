@@ -6,6 +6,7 @@ Exact equivariance to :math:`E(3)`
 >>> test()
 """
 import torch
+import intel_extension_for_pytorch as ipex
 from torch_geometric.data import Data, DataLoader
 
 from e3nn import o3
@@ -24,7 +25,7 @@ def tetris() -> None:
         [(0, 0, 0), (1, 0, 0), (1, 1, 0), (2, 1, 0)],  # zigzag
     ]
     pos = torch.tensor(pos, dtype=torch.get_default_dtype())
-
+    
     # Since chiral shapes are the mirror of one another we need an *odd* scalar to distinguish them
     labels = torch.tensor(
         [
@@ -39,10 +40,13 @@ def tetris() -> None:
         ],
         dtype=torch.get_default_dtype(),
     )
+    
 
     # apply random rotation
     pos = torch.einsum("zij,zaj->zai", o3.rand_matrix(len(pos)), pos)
 
+    pos.to("xpu")
+    labels.to("xpu")
     return pos, labels
 
 
@@ -70,12 +74,13 @@ def main() -> None:
     test_x, test_y = make_batch(x), y
 
     f = Network()
-
+    
     print("Built a model:")
     print(f)
 
     optim = torch.optim.Adam(f.parameters(), lr=1e-3)
 
+    #ipex.optimize(f)
     # == Training ==
     for step in range(300):
         pred = f(train_x)

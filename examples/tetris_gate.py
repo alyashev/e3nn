@@ -8,7 +8,8 @@ Exact equivariance to :math:`E(3)`
 import logging
 
 import torch
-from torch_cluster import radius_graph
+import intel_extension_for_pytorch as ipex
+#from torch_cluster import radius_graph
 from torch_geometric.data import Data, DataLoader
 from torch_scatter import scatter
 
@@ -18,6 +19,17 @@ from e3nn.o3 import FullyConnectedTensorProduct
 from e3nn.math import soft_one_hot_linspace
 from e3nn.util.test import assert_equivariant
 
+#def scatter (src , index , dim ):
+#    out = src.new_zeros ( dim , src.shape [1])
+#    index = index.reshape(-1, 1).expand_as(src)
+#    return out.scatter_add_(0, index, src)  
+
+def radius_graph(pos, r_max, batch) -> torch.Tensor:
+    # naive and inefficient version of torch_cluster.radius_graph
+    r = torch.cdist(pos, pos)
+    index = ((r < r_max) & (r > 0)).nonzero().T
+    index = index[:, batch[index[0]] == batch[index[1]]]
+    return index
 
 def tetris():
     pos = [
@@ -53,6 +65,9 @@ def tetris():
     # put in torch_geometric format
     dataset = [Data(pos=pos) for pos in pos]
     data = next(iter(DataLoader(dataset, batch_size=len(dataset))))
+
+    pos.to("xpu")
+    labels.to("xpu")
 
     return data, labels
 
@@ -112,7 +127,7 @@ class Network(torch.nn.Module):
     def forward(self, data) -> torch.Tensor:
         num_nodes = 4  # typical number of nodes
 
-        edge_src, edge_dst = radius_graph(x=data.pos, r=2.5, batch=data.batch)
+        edge_src, edge_dst = radius_graph(pos=data.pos, r_max=2.5,batch=data.batch)
         edge_vec = data.pos[edge_src] - data.pos[edge_dst]
         edge_attr = o3.spherical_harmonics(l=self.irreps_sh, x=edge_vec, normalize=True, normalization="component")
         edge_length_embedded = (
